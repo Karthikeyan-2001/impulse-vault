@@ -1,0 +1,48 @@
+{
+  "$schema": "./schema.json",
+  "id": "myntra.com",
+  "name": "Myntra",
+  "domains": [
+    "myntra.com"
+  ],
+  "currency": "INR",
+  "productIdPattern": "/(\\d{5,})/buy(?:[/?#]|$)",
+  "gatePathPattern": "{id}(?:/buy)?",
+  "canonicalUrl": "https://www.myntra.com/{id}",
+  "selectors": {
+    "title": [
+      ".pdp-name",
+      "h1.pdp-title"
+    ],
+    "price": [
+      ".pdp-price",
+      ".PriceInfo-price"
+    ],
+    "image": [
+      ".image-grid-image",
+      "meta[property='og:image']"
+    ],
+    "addToCart": [
+      ".pdp-add-to-bag"
+    ],
+    "buyNow": [],
+    "checkout": [
+      ".desktop-base-placeOrderButton",
+      "[class*='placeOrder' i]"
+    ],
+    "outOfStock": [
+      ".size-buttons-out-of-stock",
+      ".pdp-out-of-stock"
+    ],
+    "vaultAnchor": [
+      ".pdp-action-container"
+    ]
+  },
+  "cartPaths": [
+    "checkout"
+  ],
+  "outOfStockText": [
+    "out of stock",
+    "sold out"
+  ]
+}

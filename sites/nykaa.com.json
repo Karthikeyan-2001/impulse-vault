@@ -1,0 +1,20 @@
+{
+  "$schema": "./schema.json",
+  "id": "nykaa.com",
+  "name": "Nykaa",
+  "domains": ["nykaa.com"],
+  "currency": "INR",
+  "productIdPattern": "/p/(\\d{4,})(?:[/?#]|$)",
+  "gatePathPattern": "p/{id}",
+  "keepParams": ["skuId"],
+  "selectors": {
+    "title": ["h1"],
+    "price": [],
+    "image": ["meta[property='og:image']"],
+    "addToCart": [],
+    "buyNow": [],
+    "checkout": []
+  },
+  "cartPaths": ["checkout", "checkout-v2", "cart", "payment"],
+  "outOfStockText": ["out of stock", "notify me"]
+}

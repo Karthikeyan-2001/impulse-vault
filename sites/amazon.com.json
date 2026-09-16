@@ -1,0 +1,43 @@
+{
+  "$schema": "./schema.json",
+  "id": "amazon.com",
+  "name": "Amazon.com",
+  "domains": ["amazon.com"],
+  "currency": "USD",
+  "productIdPattern": "/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?#]|$)",
+  "gatePathPattern": "(?:dp|gp/product|gp/aw/d)/{id}",
+  "canonicalUrl": "https://www.amazon.com/dp/{id}",
+  "selectors": {
+    "title": ["#productTitle", "#title"],
+    "price": [
+      "#corePrice_feature_div .priceToPay .a-offscreen",
+      "#corePriceDisplay_desktop_feature_div .priceToPay .a-offscreen",
+      "#corePriceDisplay_desktop_feature_div .priceToPay",
+      "#corePrice_desktop .a-price .a-offscreen",
+      "#apex_desktop .priceToPay .a-offscreen",
+      "#priceblock_dealprice",
+      "#priceblock_ourprice",
+      "#price_inside_buybox",
+      "#newBuyBoxPrice"
+    ],
+    "image": ["#landingImage", "#imgTagWrapperId img", "#main-image", "#imgBlkFront"],
+    "addToCart": [
+      "#add-to-cart-button",
+      "input[name='submit.add-to-cart']",
+      "#add-to-cart-button-ubb",
+      "input[name='submit.addToCart']"
+    ],
+    "buyNow": ["#buy-now-button", "input[name='submit.buy-now']"],
+    "checkout": [
+      "input[name='proceedToRetailCheckout']",
+      "#sc-buy-box-ptc-button input",
+      "input[name='placeYourOrder1']",
+      "#placeYourOrder input",
+      "#submitOrderButtonId input"
+    ],
+    "outOfStock": ["#outOfStock", "#availability"],
+    "vaultAnchor": ["#addToCart_feature_div", "#add-to-cart-button"]
+  },
+  "cartPaths": ["gp/cart", "cart", "gp/buy", "checkout", "gp/aw/c", "gp/huc"],
+  "outOfStockText": ["currently unavailable", "temporarily out of stock", "out of stock"]
+}

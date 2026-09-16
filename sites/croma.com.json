@@ -1,0 +1,22 @@
+{
+  "$schema": "./schema.json",
+  "id": "croma.com",
+  "name": "Croma",
+  "domains": ["croma.com"],
+  "currency": "INR",
+  "productIdPattern": "/p/(\\d{4,})(?:[/?#]|$)",
+  "gatePathPattern": "p/{id}",
+  "canonicalUrl": "https://www.croma.com/p/{id}",
+  "selectors": {
+    "title": ["h1.pd-title", ".pd-title"],
+    "price": [".pdp-cp-price .amount", ".main-product-price .amount", "#pdp-product-price", ".new-price .amount"],
+    "image": ["#0prod_img", ".product-img img", "meta[property='og:image']"],
+    "addToCart": ["button.pdp-add-to-cart"],
+    "buyNow": ["button.buyNowBtn"],
+    "checkout": ["#checkout_submit", "button.proceed-to-checkout", "[class*='place-order' i]"],
+    "outOfStock": [".out-of-stock-msg", ".pdp-oos"],
+    "vaultAnchor": [".pd-action"]
+  },
+  "cartPaths": ["cart", "checkout"],
+  "outOfStockText": ["out of stock", "sold out", "currently unavailable"]
+}

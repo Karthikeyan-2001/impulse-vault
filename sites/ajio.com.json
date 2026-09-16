@@ -1,0 +1,22 @@
+{
+  "$schema": "./schema.json",
+  "id": "ajio.com",
+  "name": "AJIO",
+  "domains": ["ajio.com"],
+  "currency": "INR",
+  "productIdPattern": "/p/(\\d{6,}(?:_[a-z0-9-]+)?)(?:[/?#]|$)",
+  "gatePathPattern": "p/{id}",
+  "keepParams": [],
+  "selectors": {
+    "title": ["h1.prod-name", ".prod-name"],
+    "price": [".prod-sp", ".prod-price-section .prod-sp"],
+    "image": [".rilrtl-lazy-img", "meta[property='og:image']"],
+    "addToCart": [".pdp-addtocart-button", ".btn-gold"],
+    "buyNow": [],
+    "checkout": [".proceed-to-shipping", "[class*='place-order' i]"],
+    "outOfStock": [".out-of-stock", ".prod-oos"],
+    "vaultAnchor": [".pdp-addtocart-button"]
+  },
+  "cartPaths": ["cart", "checkout", "shipping", "payment"],
+  "outOfStockText": ["out of stock", "sold out"]
+}
