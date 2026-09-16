@@ -10,13 +10,15 @@
  * and do it again on SPA route changes, storage changes, and site re-renders.
  */
 import { call } from '../lib/api';
+import { repo } from '../lib/storage';
+import { hostMatchesDomain } from '../lib/url';
 import type { ContentMessage, PageContext } from '../types/messages';
-import { extractProduct, type ExtractResult } from './extractor';
+import { extractProduct, looksLikeProductPage, type ExtractResult } from './extractor';
 import { armInterceptor } from './interceptor';
 import { hideBanner, showCoolingBanner, showReleasedToast, showRipeBanner } from './interceptor/banner';
 import { closeOverlay, isOverlayOpen, showInterstitial } from './interceptor/overlay';
 import { domReady } from './ui-host';
-import { closeCard, needsReattach, openCard, removeLocked, removeVaultButton, showLocked, showVaultButton } from './vault-button';
+import { closeCard, hasVaultButton, needsReattach, openCard, removeLocked, removeVaultButton, showLocked, showVaultButton } from './vault-button';
 
 const flag = window as unknown as { __impulseVaultContent?: boolean };
 if (!flag.__impulseVaultContent) {
@@ -37,8 +39,12 @@ function boot(): void {
         sendResponse(true);
         return false;
       case 'content/extract':
-        sendResponse(extractProduct(document, location.href, { pack: msg.pack ?? ctx?.pack, live: true }));
-        return false;
+        // Asked directly (popup, context menu): make sure we have packs, then extract.
+        void (async () => {
+          if (!ctx) await refresh({ force: true });
+          sendResponse(extract(msg.pack));
+        })();
+        return true;
       case 'content/openVaultCard':
         void openCardFromMenu().then(sendResponse);
         return true;
@@ -65,6 +71,25 @@ function boot(): void {
   window.addEventListener('load', () => setTimeout(reportPackHealth, 2000), { once: true });
 }
 
+function extract(pack = ctx?.pack) {
+  return extractProduct(document, location.href, { pack, platformPacks: ctx?.platformPacks, live: true });
+}
+
+/**
+ * With access to every site, this runs on every page you open — so decide cheaply whether the
+ * page can matter at all before waking the worker: does this domain hold a vaulted item, and
+ * does the page even look like a product page? Both are a handful of indexed lookups.
+ */
+async function worthWaking(): Promise<boolean> {
+  try {
+    const domains = await repo.getIndexedDomains();
+    if (domains.some((d) => hostMatchesDomain(location.hostname, d))) return true;
+  } catch {
+    /* storage unavailable: fall through and let the worker decide */
+  }
+  return looksLikeProductPage(document);
+}
+
 // ── Scheduling ────────────────────────────────────────────────────────────
 
 const timers = new Map<() => unknown, number>();
@@ -89,17 +114,20 @@ function onMaybeNavigated(): void {
 function observeDom(): void {
   new MutationObserver(() => {
     if (location.href !== lastUrl) return onMaybeNavigated();
-    // Site re-rendered our button away, or the product UI arrived late (client-rendered pages).
-    if (needsReattach() || (ctx && !ctx.item && !ex?.isProductPage && Date.now() - navStartedAt < 15_000)) {
-      schedule(render, 350);
-    }
+    // Site re-rendered our button away, or the product UI arrived late. Client-rendered stores
+    // often announce the product in JSON-LD immediately but paint the buy button seconds later,
+    // so keep looking while there's still nowhere to put the button.
+    const settling = Date.now() - navStartedAt < 20_000;
+    const missingButton = !!ctx && !ctx.item && (!ex?.isProductPage || !hasVaultButton());
+    if (needsReattach() || (settling && missingButton)) schedule(render, 350);
   }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
 // ── Refresh & render ──────────────────────────────────────────────────────
 
-async function refresh(): Promise<void> {
+async function refresh(opts: { force?: boolean } = {}): Promise<void> {
   const url = location.href;
+  if (!opts.force && !(await worthWaking())) return;
   const next = await call('page/context', { url }).catch(() => null);
   if (!next || url !== location.href) return;
   ctx = next;
@@ -127,15 +155,16 @@ function render(): void {
   if (ctx.released) showReleasedToast(ctx.released);
   else hideBanner();
 
-  ex = extractProduct(document, location.href, { pack: ctx.pack, live: true });
+  ex = extract();
   if (ex.isProductPage) showVaultButton(ctx, ex);
   else removeVaultButton();
 }
 
 async function openCardFromMenu(): Promise<boolean> {
-  if (!ctx) await refresh();
+  // Asked for by name, so skip the "is this worth waking for?" check.
+  if (!ctx) await refresh({ force: true });
   if (!ctx) return false;
-  const extraction = extractProduct(document, location.href, { pack: ctx.pack, live: true });
+  const extraction = extract();
   const near = document.querySelector('impulse-vault[data-part="vault-button"]');
   openCard(ctx, extraction, near);
   return true;
@@ -144,7 +173,7 @@ async function openCardFromMenu(): Promise<boolean> {
 /** Tell the worker whether this pack's selectors still work (quiet "may be outdated" note in Options). */
 function reportPackHealth(): void {
   if (!ctx?.pack || healthReportedFor === location.href) return;
-  const result = ex ?? extractProduct(document, location.href, { pack: ctx.pack, live: true });
+  const result = ex ?? extract();
   if (!result.productId) return;
   healthReportedFor = location.href;
   void call('page/packHealth', { packId: ctx.pack.id, hit: !result.packMissed }).catch(() => undefined);

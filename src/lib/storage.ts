@@ -57,6 +57,13 @@ export const repo = {
   async getPackOverrides(): Promise<Record<string, SitePack>> {
     return read<Record<string, SitePack>>(KEYS.packs, {});
   },
+  /** Domains with an active item. Read by content scripts to stay quiet on every other page. */
+  async getIndexedDomains(): Promise<string[]> {
+    return read<string[]>(KEYS.index, []);
+  },
+  setIndexedDomains(domains: string[]): Promise<void> {
+    return serial(() => local().set({ [KEYS.index]: domains }));
+  },
   async getPackHealth(): Promise<Record<string, PackHealth>> {
     return read<Record<string, PackHealth>>(KEYS.packHealth, {});
   },

@@ -3,6 +3,7 @@
  * back in line: per-item alarms, DNR rules, the toolbar badge. Idempotent; safe to call often.
  */
 import { repo } from '../lib/storage';
+import { isActive } from '../lib/state';
 import { ensureSweepAlarm, syncItemAlarms } from './alarms';
 
 export async function updateBadge(count?: number): Promise<void> {
@@ -22,6 +23,10 @@ export function onSync(hook: Hook): void {
 
 export async function sync(): Promise<void> {
   const items = await repo.getItemList();
+  // A content script reads this one small key to decide whether a page can matter at all.
+  const domains = [...new Set(items.filter(isActive).map((i) => i.domain))].sort();
+  const known = await repo.getIndexedDomains();
+  if (domains.length !== known.length || domains.some((d, i) => d !== known[i])) await repo.setIndexedDomains(domains);
   await Promise.all([
     ensureSweepAlarm(),
     syncItemAlarms(items),

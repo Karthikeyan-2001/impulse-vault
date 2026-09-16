@@ -15,6 +15,7 @@ export const KEYS = {
   meta: 'vault:meta',
   packs: 'vault:packs',
   packHealth: 'vault:packHealth',
+  index: 'vault:index',
 } as const;
 
 export interface Snapshot {

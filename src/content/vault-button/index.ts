@@ -68,8 +68,25 @@ function borrowShape(from: Element | null, host: HTMLElement): void {
   if (cs.borderRadius && cs.borderRadius !== '0px') host.style.setProperty('--iv-r', cs.borderRadius);
 }
 
+/**
+ * Where to insert so we don't squeeze the site's own button. Dropping into a flex/grid row
+ * steals width from everything already in it (a store's "Add to Cart" wrapping to three lines),
+ * so in that case we go after the whole row and take our own line.
+ */
+function insertionPoint(anchor: Element): Element {
+  const parent = anchor.parentElement;
+  if (!parent || parent === document.body || parent === document.documentElement) return anchor;
+  const style = getComputedStyle(parent);
+  const isRow =
+    (style.display.includes('flex') || style.display.includes('grid')) &&
+    parent.children.length > 1 &&
+    !style.flexDirection.startsWith('column');
+  return isRow ? parent : anchor;
+}
+
 function placeAfter(anchor: Element, host: HTMLElement): void {
-  if (anchor.nextElementSibling !== host) anchor.insertAdjacentElement('afterend', host);
+  const at = insertionPoint(anchor);
+  if (at.nextElementSibling !== host) at.insertAdjacentElement('afterend', host);
 }
 
 // ── Vault button ──────────────────────────────────────────────────────────
@@ -92,7 +109,8 @@ export function showVaultButton(ctx: PageContext, ex: ExtractResult): void {
     });
     buttonHost.el.append(btn);
   }
-  const width = (anchor as HTMLElement).getBoundingClientRect().width;
+  // Match whatever we actually sit next to, not always the button itself.
+  const width = (insertionPoint(anchor) as HTMLElement).getBoundingClientRect().width;
   if (width > 120) buttonHost.host.style.width = `${Math.round(width)}px`;
   borrowShape(anchor, buttonHost.host);
   placeAfter(anchor, buttonHost.host);
@@ -255,6 +273,11 @@ export function removeLocked(): void {
   lockedHost = null;
   for (const el of hidden) el.removeAttribute('data-impulse-vault-hidden');
   hidden = [];
+}
+
+/** Is the Vault button currently on the page? */
+export function hasVaultButton(): boolean {
+  return !!buttonHost?.host.isConnected;
 }
 
 /** Our hosts were removed by a site re-render? */
