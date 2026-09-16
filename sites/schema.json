@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://impulse-vault.local/site-pack.schema.json",
+  "title": "Impulse Vault site pack",
+  "description": "Per-retailer extraction and interception hints. Every field except id/name/domains/selectors is optional; anything missing falls back to the generic strategies (JSON-LD, microdata, OpenGraph, heuristics).",
+  "type": "object",
+  "required": ["id", "name", "domains", "selectors"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9.-]+$",
+      "description": "Unique pack id. Built-in packs use their primary domain. A pack in Options with the same id overrides the built-in one."
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "domains": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$" },
+      "description": "Registrable domains. 'amazon.in' also matches www.amazon.in and m.amazon.in, never notamazon.in."
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "ISO 4217 code used when a price has no symbol, and to disambiguate $, kr and ¥."
+    },
+    "productIdPattern": {
+      "type": "string",
+      "description": "JavaScript/RE2-compatible regex run against pathname + search. Capture group 1 is the stable product id (ASIN, itm…, style id). Used for dedupe, canonical URLs and DNR gate rules."
+    },
+    "gatePathPattern": {
+      "type": "string",
+      "description": "RE2 regex fragment for the product path with an {id} placeholder, e.g. '(?:dp|gp/product)/{id}'. The DNR gate matches it anywhere in the path, with or without tracking params or locale prefixes. Omit to match the product id anywhere in the path."
+    },
+    "canonicalUrl": {
+      "type": "string",
+      "pattern": "^https://.+\\{id\\}",
+      "description": "Canonical product URL template with {id}. Only set it when a bare-id URL is known to resolve (Amazon's /dp/{id}); it's what 'Yes, buy it' opens and what the price re-check fetches."
+    },
+    "keepParams": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Without canonicalUrl: the only query params kept when canonicalising (e.g. Flipkart's variant 'pid'). An empty list drops all of them. Omit to drop only known tracking params."
+    },
+    "selectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "CSS selector lists. First element that matches (and has content) wins.",
+      "properties": {
+        "title": { "$ref": "#/$defs/selectorList" },
+        "price": { "$ref": "#/$defs/selectorList", "description": "Text is run through the price parser; MRP/sale pairs and ranges are handled there." },
+        "image": { "$ref": "#/$defs/selectorList" },
+        "addToCart": { "$ref": "#/$defs/selectorList", "description": "Buttons intercepted while the item is cooling, and hidden behind the locked countdown." },
+        "buyNow": { "$ref": "#/$defs/selectorList" },
+        "checkout": { "$ref": "#/$defs/selectorList", "description": "Proceed-to-checkout / place-order buttons, intercepted on any page of a domain holding a cooling item." },
+        "outOfStock": { "$ref": "#/$defs/selectorList", "description": "Elements whose presence (and text, if outOfStockText is set) means sold out." },
+        "vaultAnchor": { "$ref": "#/$defs/selectorList", "description": "Where the Vault button is inserted (after the element). Defaults to addToCart." }
+      }
+    },
+    "cartPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "RE2 regex fragments for cart/checkout paths, matched at the start of the path (after an optional locale prefix). These drive the hard cart/checkout block."
+    },
+    "outOfStockText": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Lowercase phrases that mean sold out."
+    }
+  },
+  "$defs": {
+    "selectorList": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}
