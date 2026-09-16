@@ -46,15 +46,22 @@ export function originalUrl(): string {
   return i >= 0 ? location.href.slice(i + 1) : '';
 }
 
-/** Where "take me back" goes: the page before (if it isn't the one we're gating), else the store's home. */
-export function backDestination(original: string, isGated: (url: string) => boolean): string {
+/**
+ * Where "take me back" goes: the page before (if it isn't the one we're gating), else the
+ * store's home. `fallbackUrl` covers redirects that couldn't carry the original URL — a
+ * urlFilter rule has no way to pass it through.
+ */
+export function backDestination(original: string, isGated: (url: string) => boolean, fallbackUrl = ''): string {
   const ref = document.referrer;
   if (ref && /^https?:/.test(ref) && !isGated(ref)) return ref;
-  try {
-    return `${new URL(original).origin}/`;
-  } catch {
-    return 'chrome://newtab/';
+  for (const candidate of [original, fallbackUrl]) {
+    try {
+      return `${new URL(candidate).origin}/`;
+    } catch {
+      /* not a URL: try the next candidate */
+    }
   }
+  return 'chrome://newtab/';
 }
 
 export async function currentTabId(): Promise<number> {

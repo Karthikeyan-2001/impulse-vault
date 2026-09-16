@@ -10,11 +10,13 @@ import {
   INTERSTITIAL_PATH,
   buildDynamicRules,
   buildSessionRules,
-  cartRegex,
-  gateRegex,
+  cartMatches,
+  finaliseRules,
+  gateMatches,
   lockedItems,
-  matches,
+  regexesIn,
   sameRules,
+  type BuiltRule,
 } from '../lib/rules';
 import { repo } from '../lib/storage';
 import { MINUTE } from '../lib/time';
@@ -22,8 +24,6 @@ import { hostMatchesDomain, parseUrl } from '../lib/url';
 import type { SitePack, VaultItem } from '../types';
 import { ALARM, scheduleAt } from './alarms';
 import { getPacks } from './packs';
-
-type Rule = chrome.declarativeNetRequest.Rule;
 
 const base = () => chrome.runtime.getURL('');
 
@@ -33,23 +33,22 @@ async function packResolver(): Promise<(i: Pick<VaultItem, 'packId' | 'domain'>)
 }
 
 const regexOk = new Map<string, boolean>();
-/** RE2 may reject what JS accepts (user-edited packs): drop those rules rather than fail the whole update. */
-async function supported(rules: Rule[]): Promise<Rule[]> {
-  const out: Rule[] = [];
-  for (const r of rules) {
-    const re = r.condition.regexFilter;
-    if (!re) {
-      out.push(r);
-      continue;
-    }
+/**
+ * RE2 rejects regexes JS accepts - most often 'memoryLimitExceeded' on a long domain or product
+ * slug, which is ordinary for brand-owned stores. Ask Chrome, cache the answer, and let
+ * finaliseRules swap in the urlFilter form for the ones it refuses.
+ */
+async function rejectedRegexes(built: BuiltRule[]): Promise<Set<string>> {
+  const rejected = new Set<string>();
+  for (const re of regexesIn(built)) {
     if (!regexOk.has(re)) {
       const res = await chrome.declarativeNetRequest.isRegexSupported({ regex: re, isCaseSensitive: false });
       regexOk.set(re, res.isSupported);
-      if (!res.isSupported) console.debug('[impulse-vault] unsupported regex skipped', re, res.reason);
+      if (!res.isSupported) console.debug('[impulse-vault] regex refused, using urlFilter instead:', res.reason);
     }
-    if (regexOk.get(re)) out.push(r);
+    if (!regexOk.get(re)) rejected.add(re);
   }
-  return out;
+  return rejected;
 }
 
 let chain: Promise<void> = Promise.resolve();
@@ -67,7 +66,9 @@ async function doApply(): Promise<void> {
     repo.getCartPasses(),
   ]);
   const now = Date.now();
-  const dynamic = await supported(buildDynamicRules({ items, packFor, base: base(), extensionId: chrome.runtime.id }));
+  const builtDynamic = buildDynamicRules({ items, packFor, base: base(), extensionId: chrome.runtime.id });
+  const rejectedDynamic = await rejectedRegexes(builtDynamic);
+  const dynamic = finaliseRules(builtDynamic, (re) => rejectedDynamic.has(re));
   const have = await chrome.declarativeNetRequest.getDynamicRules();
   if (!sameRules(have, dynamic)) {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: have.map((r) => r.id), addRules: dynamic });
@@ -77,7 +78,9 @@ async function doApply(): Promise<void> {
   const livePasses = passes.filter((p) => p.expiresAt > now);
   if (liveBypasses.length !== bypasses.length) await repo.setBypasses(liveBypasses);
   if (livePasses.length !== passes.length) await repo.setCartPasses(livePasses);
-  const session = await supported(buildSessionRules({ items, packFor }, liveBypasses, livePasses, now));
+  const builtSession = buildSessionRules({ items, packFor }, liveBypasses, livePasses, now);
+  const rejectedSession = await rejectedRegexes(builtSession);
+  const session = finaliseRules(builtSession, (re) => rejectedSession.has(re), true);
   const haveSession = await chrome.declarativeNetRequest.getSessionRules();
   if (!sameRules(haveSession, session)) {
     await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: haveSession.map((r) => r.id), addRules: session });
@@ -90,7 +93,7 @@ async function doApply(): Promise<void> {
 async function safeProductUrl(item: VaultItem, url: string): Promise<string> {
   const packFor = await packResolver();
   const u = parseUrl(url);
-  return u && matches(gateRegex(item, packFor(item)), u.toString()) ? u.toString() : item.url;
+  return u && gateMatches(item, packFor(item), u.toString()) ? u.toString() : item.url;
 }
 
 /** "View the page anyway": a 30-minute pass for this tab, then go there. */
@@ -146,14 +149,14 @@ export async function checkTab(tabId: number, url: string): Promise<void> {
   const [bypasses, passes] = await Promise.all([repo.getBypasses(), repo.getCartPasses()]);
   for (const item of items) {
     if (!hostMatchesDomain(u.hostname, item.domain)) continue;
-    if (matches(gateRegex(item, packFor(item)), url)) {
+    if (gateMatches(item, packFor(item), url)) {
       if (bypasses.some((b) => b.tabId === tabId && b.itemId === item.id && b.expiresAt > now) && !item.lockdown) return;
       await chrome.tabs.update(tabId, { url: `${base()}${GATE_PATH}?id=${encodeURIComponent(item.id)}#${url}` });
       return;
     }
   }
   const onDomain = items.find((i) => hostMatchesDomain(u.hostname, i.domain));
-  if (onDomain && matches(cartRegex(onDomain.domain, packFor(onDomain)), url)) {
+  if (onDomain && cartMatches(onDomain.domain, packFor(onDomain), url)) {
     if (passes.some((p) => p.tabId === tabId && p.domain === onDomain.domain && p.expiresAt > now)) return;
     await chrome.tabs.update(tabId, { url: `${base()}${INTERSTITIAL_PATH}?d=${encodeURIComponent(onDomain.domain)}#${url}` });
   }

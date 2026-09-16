@@ -9,7 +9,7 @@
 import { call } from '../../lib/api';
 import { latestPrice } from '../../lib/copy';
 import { formatMoney } from '../../lib/money';
-import { cartRegex, lockedItems, matches } from '../../lib/rules';
+import { cartMatches, lockedItems } from '../../lib/rules';
 import { repo } from '../../lib/storage';
 import { formatRemaining, remainingMs } from '../../lib/time';
 import type { Settings, VaultItem } from '../../types';
@@ -18,8 +18,13 @@ import { createUnlockFlow } from '../../ui/unlock';
 import { backDestination, bootPage, brand, currentTabId, goTo, originalUrl } from '../shared';
 
 const root = bootPage();
-const domain = new URLSearchParams(location.search).get('d') ?? '';
-const original = originalUrl();
+const params = new URLSearchParams(location.search);
+const domain = params.get('d') ?? '';
+/**
+ * The URL we were redirected from. A urlFilter fallback rule can't carry it, so those rules
+ * name the cart path they matched instead (`&p=cart`) and we rebuild a usable destination.
+ */
+const original = originalUrl() || (params.get('p') ? `https://${domain}/${params.get('p')}` : `https://${domain}/`);
 const PASS_WAIT_SECONDS = 10;
 
 async function main(): Promise<void> {
@@ -34,7 +39,7 @@ async function main(): Promise<void> {
 }
 
 function leave(): Promise<void> {
-  return goTo(backDestination(original, (u) => matches(cartRegex(domain), u)));
+  return goTo(backDestination(original, (u) => cartMatches(domain, undefined, u), `https://${domain}/`));
 }
 
 function render(items: VaultItem[], settings: Settings, tabId: number): void {

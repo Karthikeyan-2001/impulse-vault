@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import amazonPack from '../sites/amazon.in.json';
-import { PRIORITY, buildDynamicRules, buildSessionRules, cartRegex, gateRegex, matches } from '../src/lib/rules';
+import { PRIORITY, buildDynamicRules, buildSessionRules, cartRegex, cartUrlFilters, finaliseRules, gateMatches, gateRegex, gateUrlFilter, matches } from '../src/lib/rules';
 import type { SitePack, VaultItem } from '../src/types';
 
 const amazon = amazonPack as SitePack;
@@ -93,14 +93,14 @@ describe('rule sets', () => {
   });
 
   it('one gate rule per locked item, one cart rule per domain', () => {
-    const rules = buildDynamicRules(
+    const rules = finaliseRules(buildDynamicRules(
       inputs([
         item(),
         item({ id: 'item-2', productId: 'B000000002' }),
         item({ id: 'ripe', state: 'ripe' }),
         item({ id: 'nolock', lockEnabled: false, productId: 'B000000003' }),
       ]),
-    );
+    ), () => false);
     const gates = rules.filter((r) => r.priority === PRIORITY.gate);
     const carts = rules.filter((r) => r.priority === PRIORITY.cart);
     expect(gates).toHaveLength(2);
@@ -112,14 +112,14 @@ describe('rule sets', () => {
   });
 
   it('no cooling items → no rules at all', () => {
-    expect(buildDynamicRules(inputs([item({ state: 'released' }), item({ state: 'declined' })]))).toEqual([]);
+    expect(finaliseRules(buildDynamicRules(inputs([item({ state: 'released' }), item({ state: 'declined' })])), () => false)).toEqual([]);
   });
 
   it('bypass outranks the gate but never the cart block; cart pass outranks the cart block', () => {
     expect(PRIORITY.bypass).toBeGreaterThan(PRIORITY.gate);
     expect(PRIORITY.bypass).toBeLessThan(PRIORITY.cart);
     expect(PRIORITY.cartPass).toBeGreaterThan(PRIORITY.cart);
-    const session = buildSessionRules(
+    const session = finaliseRules(buildSessionRules(
       inputs([item(), item({ id: 'locked-down', productId: 'B000000009', lockdown: true })]),
       [
         { tabId: 7, itemId: 'item-1', expiresAt: NOW + 1000 },
@@ -128,10 +128,55 @@ describe('rule sets', () => {
       ],
       [{ tabId: 9, domain: 'amazon.in', expiresAt: NOW + 1000 }],
       NOW,
-    );
+    ), () => false, true);
     expect(session.map((r) => [r.priority, r.condition.tabIds])).toEqual([
       [PRIORITY.bypass, [7]],
       [PRIORITY.cartPass, [9]],
     ]);
+  });
+});
+
+describe('urlFilter fallback — when RE2 refuses the regex', () => {
+  // A real brand-store URL: long domain, 64-character slug. Chrome's RE2 rejects the regex
+  // form with memoryLimitExceeded, which used to mean no lock at all on sites like this.
+  const LONG = 'https://computechstore.in/product/nvidia-dgx-spark-gb10-ai-supercomputer-platform-for-deep-learning';
+  const longItem = item({ id: 'long', url: LONG, domain: 'computechstore.in', productId: undefined, packId: undefined });
+  const inputs = { items: [longItem], packFor: () => undefined, base: 'chrome-extension://abc/', extensionId: 'abc' };
+
+  it('every rule carries a urlFilter alternative', () => {
+    for (const built of buildDynamicRules(inputs)) {
+      expect(built.fallback.length, JSON.stringify(built.rule.condition)).toBeGreaterThan(0);
+      for (const f of built.fallback) {
+        expect(f.condition.urlFilter).toBeTruthy();
+        expect(f.condition.regexFilter).toBeUndefined();
+      }
+    }
+  });
+
+  it('swaps in urlFilter rules when the regex is rejected, and still locks', () => {
+    const built = buildDynamicRules(inputs);
+    const rules = finaliseRules(built, () => true); // pretend RE2 refused everything
+    const gate = rules.find((r) => r.priority === PRIORITY.gate)!;
+    expect(gate.condition.urlFilter).toBe('||computechstore.in/product/nvidia-dgx-spark-gb10-ai-supercomputer-platform-for-deep-learning');
+    expect(gate.action.redirect?.url).toBe('chrome-extension://abc/pages/gate/index.html?id=long');
+    // The cart block becomes one cheap rule per path, each naming its path for the interstitial.
+    const carts = rules.filter((r) => r.priority === PRIORITY.cart);
+    expect(carts.length).toBeGreaterThan(1);
+    expect(carts.map((c) => c.condition.urlFilter)).toContain('||computechstore.in/cart');
+    expect(carts[0]!.action.redirect?.url).toContain('&p=');
+    expect(new Set(rules.map((r) => r.id)).size).toBe(rules.length);
+  });
+
+  it('gateMatches works for both shapes, so the backstop and gate agree', () => {
+    expect(gateMatches(longItem, undefined, `${LONG}/`)).toBe(true);
+    expect(gateMatches(longItem, undefined, `${LONG}/?utm_source=x`)).toBe(true);
+    expect(gateMatches(longItem, undefined, 'https://www.computechstore.in/product/nvidia-dgx-spark-gb10-ai-supercomputer-platform-for-deep-learning')).toBe(true);
+    expect(gateMatches(longItem, undefined, 'https://computechstore.in/product/something-else')).toBe(false);
+    expect(gateMatches(item(), amazon, 'https://www.amazon.in/-/hi/Sony/dp/B09XS7JWHH?th=1')).toBe(true);
+  });
+
+  it('urlFilter forms are sane', () => {
+    expect(gateUrlFilter(item(), amazon)).toBe('||amazon.in/*B09XS7JWHH');
+    expect(cartUrlFilters('computechstore.in').map((c) => c.filter)).toContain('||computechstore.in/checkout');
   });
 });
