@@ -1,0 +1,33 @@
+{
+  "$schema": "./schema.json",
+  "id": "platform-shopify",
+  "name": "Shopify stores",
+  "domains": [],
+  "detect": [
+    "meta[name='shopify-checkout-api-token']",
+    "link[href*='cdn.shopify.com']",
+    "script[src*='cdn.shopify.com']",
+    "form[action*='/cart/add']"
+  ],
+  "productIdPattern": "/products/([a-zA-Z0-9._%-]+)(?:[/?#]|$)",
+  "gatePathPattern": "products/{id}",
+  "keepParams": ["variant"],
+  "selectors": {
+    "title": [".product__title", ".product-single__title", "h1.product-title", "h1"],
+    "price": [
+      ".price__current .price-item",
+      ".price-item--sale",
+      ".price-item--regular",
+      ".product__price",
+      "[data-product-price]"
+    ],
+    "image": [".product__media img", "meta[property='og:image']"],
+    "addToCart": ["form[action*='/cart/add'] [type='submit']", "button[name='add']", ".product-form__submit"],
+    "buyNow": [".shopify-payment-button__button", "[data-testid='Checkout-button']"],
+    "checkout": ["[name='checkout']", "button[name='checkout']", ".cart__checkout"],
+    "outOfStock": [".product-form__submit[disabled]", ".price--sold-out"],
+    "vaultAnchor": ["form[action*='/cart/add']", ".product-form__buttons"]
+  },
+  "cartPaths": ["cart", "checkouts", "checkout"],
+  "outOfStockText": ["sold out", "out of stock", "unavailable"]
+}

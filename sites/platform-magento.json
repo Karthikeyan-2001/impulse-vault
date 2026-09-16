@@ -1,0 +1,19 @@
+{
+  "$schema": "./schema.json",
+  "id": "platform-magento",
+  "name": "Magento stores",
+  "domains": [],
+  "detect": ["script[type='text/x-magento-init']", "body.catalog-product-view", "[data-role='add-to-cart']"],
+  "selectors": {
+    "title": ["h1.page-title .base", ".page-title span.base", "h1"],
+    "price": ["[data-price-type='finalPrice'] .price", ".price-box .price", ".product-info-price .price"],
+    "image": [".fotorama__img", ".gallery-placeholder img", "meta[property='og:image']"],
+    "addToCart": ["#product-addtocart-button", "button.tocart", "[data-role='add-to-cart']"],
+    "buyNow": [],
+    "checkout": ["#top-cart-btn-checkout", "button.checkout", ".action.primary.checkout"],
+    "outOfStock": [".stock.unavailable"],
+    "vaultAnchor": [".box-tocart", "#product-addtocart-button"]
+  },
+  "cartPaths": ["checkout", "cart", "onestepcheckout"],
+  "outOfStockText": ["out of stock", "sold out"]
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "./schema.json",
+  "id": "platform-woocommerce",
+  "name": "WooCommerce stores",
+  "domains": [],
+  "detect": [
+    "body.woocommerce",
+    "body.woocommerce-page",
+    "form.cart",
+    "link[href*='/plugins/woocommerce/']",
+    "script[src*='/plugins/woocommerce/']",
+    ".woocommerce-Price-amount"
+  ],
+  "productIdPattern": "/product/([a-zA-Z0-9._%-]+)(?:[/?#]|$)",
+  "gatePathPattern": "product/{id}",
+  "selectors": {
+    "title": ["h1.product_title", ".product_title", "h1.entry-title", "h1"],
+    "price": [
+      ".summary .price ins .woocommerce-Price-amount",
+      ".summary .price .woocommerce-Price-amount",
+      "p.price .woocommerce-Price-amount",
+      ".price .amount"
+    ],
+    "image": [".woocommerce-product-gallery__image img", "meta[property='og:image']"],
+    "addToCart": ["form.cart button[type='submit']", "button.single_add_to_cart_button", ".single_add_to_cart_button"],
+    "buyNow": [".buy-now-button", "[class*='buy-now' i]"],
+    "checkout": [".checkout-button", "a.checkout-button", "#place_order"],
+    "outOfStock": ["p.stock.out-of-stock", ".out-of-stock"],
+    "vaultAnchor": ["form.cart", ".summary form.cart"]
+  },
+  "cartPaths": ["cart", "checkout", "basket"],
+  "outOfStockText": ["out of stock", "sold out"]
+}

@@ -29,8 +29,14 @@ export function validatePack(input: unknown, isValidSelector?: (s: string) => bo
   const p = input as Record<string, any>;
   if (typeof p.id !== 'string' || !/^[a-z0-9.-]+$/.test(p.id)) errors.push('"id" must be lowercase letters, digits, dots or dashes.');
   if (typeof p.name !== 'string' || !p.name.trim()) errors.push('"name" is required.');
-  if (!Array.isArray(p.domains) || p.domains.length === 0) {
-    errors.push('"domains" needs at least one domain, like "example.com".');
+  const isPlatform = Array.isArray(p.detect) && p.detect.length > 0;
+  if (p.detect !== undefined && (!Array.isArray(p.detect) || p.detect.some((s: unknown) => typeof s !== 'string' || !s.trim()))) {
+    errors.push('"detect" must be a list of CSS selectors that fingerprint the platform.');
+  } else if (isPlatform && isValidSelector) {
+    for (const s of p.detect as string[]) if (!isValidSelector(s)) errors.push(`"${s}" (detect) isn't a valid CSS selector.`);
+  }
+  if (!Array.isArray(p.domains) || (p.domains.length === 0 && !isPlatform)) {
+    errors.push('"domains" needs at least one domain, like "example.com" — or use "detect" for a platform pack.');
   } else {
     for (const d of p.domains) {
       if (typeof d !== 'string' || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) errors.push(`"${d}" isn't a bare domain (no https://, no paths).`);
@@ -79,6 +85,35 @@ export function validatePack(input: unknown, isValidSelector?: (s: string) => bo
   if (errors.length) return { ok: false, errors };
   const { $schema: _ignored, ...pack } = p;
   return { ok: true, pack: pack as SitePack };
+}
+
+export const isPlatformPack = (p: SitePack): boolean => !!p.detect?.length;
+
+/** Packs bound to domains (the built-in retailers and anything the user adds). */
+export function domainPacks(packs: SitePack[]): SitePack[] {
+  return packs.filter((p) => !isPlatformPack(p));
+}
+
+/** Packs matched by storefront software instead of domain. */
+export function platformPacks(packs: SitePack[]): SitePack[] {
+  return packs.filter(isPlatformPack);
+}
+
+/**
+ * Which platform built this page? One cheap querySelector per fingerprint — these are
+ * indexed by the browser, so this stays fast enough to run on any page.
+ */
+export function detectPlatform(doc: ParentNode, packs: SitePack[]): SitePack | undefined {
+  for (const pack of platformPacks(packs)) {
+    for (const selector of pack.detect ?? []) {
+      try {
+        if (doc.querySelector(selector)) return pack;
+      } catch {
+        /* a user-edited selector that doesn't parse: skip it */
+      }
+    }
+  }
+  return undefined;
 }
 
 /** Built-ins, with same-id overrides swapped in and custom packs appended. */

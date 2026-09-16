@@ -114,8 +114,14 @@ export interface SitePackSelectors {
 export interface SitePack {
   id: string;
   name: string;
-  /** Registrable domains, e.g. "amazon.in". Subdomains (www., m.) match. */
+  /** Registrable domains, e.g. "amazon.in". Subdomains (www., m.) match. Empty for platform packs. */
   domains: string[];
+  /**
+   * Platform pack: CSS selectors that fingerprint the storefront software (Shopify,
+   * WooCommerce, Magento). Matched on the page when no domain pack applies, so one pack
+   * covers thousands of brand-owned stores. Any selector matching is enough.
+   */
+  detect?: string[];
   currency?: string;
   /** Regex run against pathname+search; capture group 1 is the product ID. */
   productIdPattern?: string;

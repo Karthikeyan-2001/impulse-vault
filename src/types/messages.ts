@@ -3,6 +3,8 @@ import type { Extraction, Settings, SitePack, VaultDraft, VaultItem } from './in
 /** What the content script needs to render a page. */
 export interface PageContext {
   pack?: SitePack;
+  /** Fingerprint packs (Shopify, WooCommerce...), used when no domain pack matches. */
+  platformPacks: SitePack[];
   /** An active (cooling/ripe) item for the product on this page. */
   item?: VaultItem;
   /** Released in the last few minutes (for the "Go get it" line). */

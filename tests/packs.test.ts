@@ -1,10 +1,14 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_PACKS } from '../src/lib/builtin-packs';
 import { cartRegex, gateRegex, matches } from '../src/lib/rules';
-import { validatePack } from '../src/lib/sitepack';
+// platform detection runs against a DOM
+import { detectPlatform, domainPacks, platformPacks, validatePack } from '../src/lib/sitepack';
 import { canonicalizeUrl, extractProductId, findPack } from '../src/lib/url';
 
 /** Real product URLs, captured from the live sites. */
+const doc = (html: string) => new DOMParser().parseFromString(html, 'text/html');
+
 const SAMPLES: { id: string; url: string; productId: string; canonical: string; cart: string[] }[] = [
   {
     id: 'amazon.in',
@@ -59,7 +63,7 @@ const SAMPLES: { id: string; url: string; productId: string; canonical: string; 
 
 describe('shipped site packs', () => {
   it('ships one pack per supported retailer, all valid, ids unique', () => {
-    const ids = BUILTIN_PACKS.map((p) => p.id).sort();
+    const ids = domainPacks(BUILTIN_PACKS).map((p) => p.id).sort();
     expect(ids).toEqual(['ajio.com', 'amazon.com', 'amazon.in', 'croma.com', 'flipkart.com', 'myntra.com', 'nykaa.com']);
     expect(new Set(ids).size).toBe(ids.length);
     for (const pack of BUILTIN_PACKS) {
@@ -91,5 +95,60 @@ describe('shipped site packs', () => {
     expect(matches(cart, sample.url), 'product URL').toBe(false);
     expect(matches(cart, sample.canonical), 'canonical URL').toBe(false);
     expect(matches(cart, `https://www.${sample.id}/`), 'home page').toBe(false);
+  });
+});
+
+describe('platform packs — one pack, thousands of brand-owned stores', () => {
+  const platforms = platformPacks(BUILTIN_PACKS);
+
+  it('ships Shopify, WooCommerce and Magento, each valid and domain-free', () => {
+    expect(platforms.map((p) => p.id).sort()).toEqual(['platform-magento', 'platform-shopify', 'platform-woocommerce']);
+    for (const pack of platforms) {
+      const result = validatePack(pack);
+      expect(result.ok ? [] : result.errors, pack.id).toEqual([]);
+      expect(pack.domains).toEqual([]);
+      expect(pack.detect?.length, `${pack.id} needs fingerprints`).toBeGreaterThan(0);
+      // A platform pack must never be picked up by domain matching.
+      expect(findPack('https://any-store.example.com/x', [pack])).toBeUndefined();
+    }
+  });
+
+  it('detects the platform from the page, not the URL', () => {
+    const shopify = doc('<head><meta name="shopify-checkout-api-token" content="abc"></head><body><h1>Tee</h1></body>');
+    const woo = doc('<body class="woocommerce"><form class="cart"><button type="submit">Add to cart</button></form></body>');
+    const plain = doc('<body><article>A blog post</article></body>');
+    expect(detectPlatform(shopify, platforms)?.id).toBe('platform-shopify');
+    expect(detectPlatform(woo, platforms)?.id).toBe('platform-woocommerce');
+    expect(detectPlatform(plain, platforms)).toBeUndefined();
+  });
+
+  it('Shopify: gates a product across collection paths and blocks /checkouts/', () => {
+    const shopify = platforms.find((p) => p.id === 'platform-shopify')!;
+    const url = 'https://www.boat-lifestyle.com/products/boat-sailor-nav?variant=123&utm_source=ig';
+    expect(extractProductId(url, shopify)).toBe('boat-sailor-nav');
+    expect(canonicalizeUrl(url, shopify)).toBe('https://www.boat-lifestyle.com/products/boat-sailor-nav?variant=123');
+
+    const item = { url: canonicalizeUrl(url, shopify), domain: 'boat-lifestyle.com', productId: 'boat-sailor-nav' };
+    const gate = gateRegex(item, shopify);
+    expect(matches(gate, url)).toBe(true);
+    // Same product reached through a collection — one item, not two.
+    expect(matches(gate, 'https://www.boat-lifestyle.com/collections/earbuds/products/boat-sailor-nav')).toBe(true);
+    expect(matches(gate, 'https://www.boat-lifestyle.com/products/some-other-thing')).toBe(false);
+
+    const cart = cartRegex('boat-lifestyle.com', shopify);
+    expect(matches(cart, 'https://www.boat-lifestyle.com/cart'), '/cart').toBe(true);
+    // Shopify's real checkout, and where "Buy it now" jumps to.
+    expect(matches(cart, 'https://www.boat-lifestyle.com/checkouts/c/abc123/information'), '/checkouts/').toBe(true);
+    expect(matches(cart, 'https://www.boat-lifestyle.com/products/boat-sailor-nav'), 'product page').toBe(false);
+  });
+
+  it('WooCommerce: the reported store', () => {
+    const woo = platforms.find((p) => p.id === 'platform-woocommerce')!;
+    const url = 'https://computechstore.in/product/nvidia-dgx-spark-gb10-ai-supercomputer-platform-for-deep-learning/';
+    expect(extractProductId(url, woo)).toBe('nvidia-dgx-spark-gb10-ai-supercomputer-platform-for-deep-learning');
+    const cart = cartRegex('computechstore.in', woo);
+    expect(matches(cart, 'https://computechstore.in/cart/')).toBe(true);
+    expect(matches(cart, 'https://computechstore.in/checkout/')).toBe(true);
+    expect(matches(cart, url)).toBe(false);
   });
 });

@@ -7,6 +7,7 @@
  * The pack runs before meta tags because it's the higher-confidence source; see DECISIONS.md.
  * Runs against a live document (content script) or a DOMParser document (offscreen re-scrape).
  */
+import { detectPlatform, isPlatformPack } from '../../lib/sitepack';
 import { canonicalizeUrl, domainOf, extractProductId, parseUrl } from '../../lib/url';
 import type { Confidence, Extraction, SitePack } from '../../types';
 import { currencyFromHost, type Candidate } from './common';
@@ -18,8 +19,41 @@ import { fromPack } from './pack';
 
 export interface ExtractOptions {
   pack?: SitePack;
+  /** Platform packs (Shopify, WooCommerce…), used when no domain pack matches. */
+  platformPacks?: SitePack[];
   /** True in a rendered page (layout available); false in a DOMParser document. */
   live: boolean;
+}
+
+/**
+ * A few indexed selector lookups that answer "could this be a product page at all?".
+ * Cheap enough to run on every page when the extension is allowed on every site, so the
+ * real extraction (and its heuristics) only runs where it might pay off.
+ */
+const PRODUCT_HINTS = [
+  'script[type="application/ld+json"]',
+  'meta[property="og:type"][content="product" i]',
+  'meta[property="product:price:amount"]',
+  'meta[property="og:price:amount"]',
+  '[itemtype*="schema.org/Product" i]',
+  'form[action*="/cart/add"]',
+  'form.cart',
+  '[id*="add-to-cart" i]',
+  '[name="submit.add-to-cart"]',
+  '[data-testid*="add-to-cart" i]',
+  '[data-role="add-to-cart"]',
+  '.shopify-payment-button__button',
+  '.single_add_to_cart_button',
+];
+
+export function looksLikeProductPage(doc: ParentNode): boolean {
+  return PRODUCT_HINTS.some((sel) => {
+    try {
+      return !!doc.querySelector(sel);
+    } catch {
+      return false;
+    }
+  });
 }
 
 export interface ExtractResult extends Extraction {
@@ -39,7 +73,9 @@ function hasGenericCartButton(doc: Document): boolean {
 }
 
 export function extractProduct(doc: Document, url: string, opts: ExtractOptions): ExtractResult {
-  const { pack, live } = opts;
+  const { live } = opts;
+  // A domain pack wins; otherwise fingerprint the storefront software.
+  const pack = opts.pack ?? detectPlatform(doc, opts.platformPacks ?? []);
   const u = parseUrl(url);
   const host = u?.hostname ?? '';
   const hint = pack?.currency ?? currencyFromHost(host);
@@ -106,6 +142,6 @@ export function extractProduct(doc: Document, url: string, opts: ExtractOptions)
     productId,
     packId: pack?.id,
     isProductPage: isProduct,
-    packMissed: !!(pack && productId && !packMatched),
+    packMissed: !!(pack && !isPlatformPack(pack) && productId && !packMatched),
   };
 }

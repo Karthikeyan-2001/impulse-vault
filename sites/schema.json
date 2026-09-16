@@ -16,9 +16,14 @@
     "name": { "type": "string", "minLength": 1 },
     "domains": {
       "type": "array",
-      "minItems": 1,
       "items": { "type": "string", "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)+$" },
-      "description": "Registrable domains. 'amazon.in' also matches www.amazon.in and m.amazon.in, never notamazon.in."
+      "description": "Registrable domains. 'amazon.in' also matches www.amazon.in and m.amazon.in, never notamazon.in. Empty only for a platform pack, which uses 'detect' instead."
+    },
+    "detect": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Platform pack: CSS selectors that fingerprint the storefront software (e.g. Shopify's meta[name='shopify-checkout-api-token']). Used when no domain pack matches, so one pack covers thousands of brand-owned stores. Any one selector matching is enough."
     },
     "currency": {
       "type": "string",
