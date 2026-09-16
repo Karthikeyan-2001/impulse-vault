@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Tailwind colours resolve to the shared runtime tokens (ui/theme.ts), so light/dark is one system. */
+@theme inline {
+  --color-bg: var(--iv-bg);
+  --color-surface: var(--iv-surface);
+  --color-surface-2: var(--iv-surface-2);
+  --color-line: var(--iv-line);
+  --color-text: var(--iv-text);
+  --color-muted: var(--iv-muted);
+  --color-brass: var(--iv-brass);
+  --color-brass-strong: var(--iv-brass-strong);
+  --color-brass-soft: var(--iv-brass-soft);
+  --color-ink: var(--iv-ink);
+  --color-on-ink: var(--iv-on-ink);
+  --color-mint: var(--iv-mint);
+  --color-mint-soft: var(--iv-mint-soft);
+  --color-on-mint: var(--iv-on-mint);
+  --color-warn: var(--iv-warn);
+  --color-warn-soft: var(--iv-warn-soft);
+  --color-danger: var(--iv-danger);
+}
+
+html, body { margin: 0; background: var(--iv-bg); }
+body { color: var(--iv-text); }
+.tabular { font-variant-numeric: tabular-nums; }
