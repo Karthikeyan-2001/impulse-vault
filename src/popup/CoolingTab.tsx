@@ -9,6 +9,33 @@ import { DoorArt, Empty, Kbd, LockGlyph, Thumb } from './components';
 
 type LetGo = (item: VaultItem, from: DOMRect) => Promise<void>;
 
+/**
+ * Tracked but not locked: we have no access to that site, so no button is held and no gate
+ * fires. That's easy to miss, so say it plainly and make the fix one click.
+ */
+function LockSite({ item }: { item: VaultItem }) {
+  const [asked, setAsked] = useState(false);
+  if (asked) return <span className="text-[11.5px] text-muted">asking Chrome…</span>;
+  return (
+    <button
+      onClick={() => {
+        setAsked(true);
+        chrome.permissions.request({ origins: [`https://*.${item.domain}/*`] }).then(
+          (ok) => {
+            setAsked(false);
+            if (ok) void call('site/enable', { origin: `https://*.${item.domain}/*` });
+          },
+          () => setAsked(false),
+        );
+      }}
+      title={`Impulse Vault has no access to ${item.domain}, so this item is tracked but its buy button isn't locked.`}
+      className="inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-warn-soft px-1.5 py-0.5 text-[11.5px] font-semibold text-warn hover:underline"
+    >
+      not locked — allow {item.domain}
+    </button>
+  );
+}
+
 export function CoolingTab({
   items,
   onLetGo,
@@ -74,7 +101,7 @@ function CoolingRow({
               <LockGlyph className="h-3 w-3" />
               {formatCountdown(left)}
             </span>
-            {!item.lockEnabled ? <span className="text-[11.5px] text-muted" title="No access to this site, so it's tracked but not locked.">tracked only</span> : null}
+            {!item.lockEnabled ? <LockSite item={item} /> : null}
           </div>
           {item.note ? <p className="m-0 mt-1.5 line-clamp-2 text-[12.5px] italic text-muted">“{item.note}”</p> : null}
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
