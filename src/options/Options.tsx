@@ -3,7 +3,10 @@ import { call } from '../lib/api';
 import { formatMoney, fromMajor, isCurrencyCode, parseMoneyInput, toMajor } from '../lib/money';
 import { repo } from '../lib/storage';
 import type { Milestone, PackHealth, Settings, SitePack } from '../types';
+import { BUILTIN_PACKS } from '../lib/builtin-packs';
+import { domainPacks } from '../lib/sitepack';
 import { useVaultState } from '../ui/react/hooks';
+import { AllSites } from './AllSites';
 import { Data, DangerZone } from './Data';
 import { Sites } from './Sites';
 import { Badge, Button, Card, NumberField, Note, Row, Select, TextField, Toggle } from './fields';
@@ -71,6 +74,8 @@ export function Options() {
           </div>
         </Card>
       ) : null}
+
+      <AllSites builtinDomains={domainPacks(BUILTIN_PACKS).flatMap((p) => p.domains)} />
 
       <Card title="Cooling off">
         <Row label="Default cooling-off period" hint="You can still pick a different one for each item when you vault it." htmlFor="cooldown">

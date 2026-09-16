@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { call } from '../lib/api';
 import { BUILTIN_PACKS } from '../lib/builtin-packs';
-import { effectivePacks, validatePack } from '../lib/sitepack';
+import { domainPacks, effectivePacks, isPlatformPack, platformPacks, validatePack } from '../lib/sitepack';
 import type { PackHealth, SitePack } from '../types';
 import { Badge, Button, Card, Note } from './fields';
 
@@ -39,13 +39,16 @@ export function Sites({ overrides, health }: { overrides: Record<string, SitePac
   const [draft, setDraft] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [granted, setGranted] = useState<string[]>([]);
-  const packs = effectivePacks(BUILTIN_PACKS, overrides);
+  const all = effectivePacks(BUILTIN_PACKS, overrides);
+  const packs = domainPacks(all);
+  const platforms = platformPacks(all);
 
   useEffect(() => {
     chrome.permissions.getAll().then((p) => setGranted(p.origins ?? []));
   }, [overrides]);
 
   const hasAccess = (pack: SitePack) =>
+    isPlatformPack(pack) ||
     pack.domains.every((d) => granted.some((o) => o === `https://*.${d}/*` || o === `https://${d}/*` || o === '<all_urls>' || o === 'https://*/*'));
 
   const save = async (id: string | null) => {
@@ -84,70 +87,83 @@ export function Sites({ overrides, health }: { overrides: Record<string, SitePac
     );
   };
 
+  const renderPack = (pack: SitePack) => {
+    const builtin = BUILTIN_PACKS.find((b) => b.id === pack.id);
+    const edited = !!overrides[pack.id];
+    const h = health[pack.id];
+    const stale = !!h?.lastMiss && (!h.lastHit || h.lastMiss > h.lastHit);
+    const access = hasAccess(pack);
+    return (
+      <div key={pack.id} className="rounded-xl border border-line p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13.5px] font-semibold">{pack.name}</span>
+          <span className="text-[12.5px] text-muted">{pack.domains.join(', ')}</span>
+          {edited ? <Badge tone="brass">edited</Badge> : null}
+          {!builtin ? <Badge tone="mint">custom</Badge> : null}
+          {stale ? <Badge tone="warn">pack may be outdated</Badge> : null}
+          {!access ? <Badge tone="warn">no site access</Badge> : null}
+          <span className="ml-auto flex gap-2">
+            {!access ? <Button onClick={() => requestAccess(pack)}>Allow access</Button> : null}
+            <Button
+              onClick={() => {
+                setEditing(editing === pack.id ? null : pack.id);
+                setDraft(JSON.stringify(pack, null, 2));
+                setErrors([]);
+              }}
+            >
+              {editing === pack.id ? 'Close' : 'Edit'}
+            </Button>
+            {edited || !builtin ? <Button onClick={() => void reset(pack.id)}>{builtin ? 'Reset' : 'Remove'}</Button> : null}
+          </span>
+        </div>
+        {stale ? <Note tone="warn">Its selectors didn’t match the last product page we saw. Extraction still works through the generic strategies; the pack may need updating.</Note> : null}
+        {!access ? <Note>Items from this site are tracked, but not locked, until Chrome grants access.</Note> : null}
+        {editing === pack.id ? (
+          <div className="mt-3">
+            <textarea
+              className="h-72 w-full rounded-xl border border-line bg-surface-2 p-3 font-mono text-[12px] leading-relaxed text-text outline-none focus:border-brass"
+              value={draft}
+              spellCheck={false}
+              onChange={(e) => setDraft(e.currentTarget.value)}
+            />
+            {errors.length ? (
+              <ul className="m-0 mt-2 list-disc pl-5 text-[12.5px] text-danger">
+                {errors.map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="mt-2 flex gap-2">
+              <Button tone="primary" onClick={() => void save(pack.id)}>
+                Save pack
+              </Button>
+              <Button onClick={() => setEditing(null)}>Cancel</Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <Card
       title="Supported sites"
       subtitle="Packs tell Impulse Vault where the title, price and buy buttons are, and which paths are the cart. Without one, it falls back to JSON-LD, microdata, OpenGraph and plain heuristics — which works on most stores."
     >
       <div className="grid gap-2">
-        {packs.map((pack) => {
-          const builtin = BUILTIN_PACKS.find((b) => b.id === pack.id);
-          const edited = !!overrides[pack.id];
-          const h = health[pack.id];
-          const stale = !!h?.lastMiss && (!h.lastHit || h.lastMiss > h.lastHit);
-          const access = hasAccess(pack);
-          return (
-            <div key={pack.id} className="rounded-xl border border-line p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13.5px] font-semibold">{pack.name}</span>
-                <span className="text-[12.5px] text-muted">{pack.domains.join(', ')}</span>
-                {edited ? <Badge tone="brass">edited</Badge> : null}
-                {!builtin ? <Badge tone="mint">custom</Badge> : null}
-                {stale ? <Badge tone="warn">pack may be outdated</Badge> : null}
-                {!access ? <Badge tone="warn">no site access</Badge> : null}
-                <span className="ml-auto flex gap-2">
-                  {!access ? <Button onClick={() => requestAccess(pack)}>Allow access</Button> : null}
-                  <Button
-                    onClick={() => {
-                      setEditing(editing === pack.id ? null : pack.id);
-                      setDraft(JSON.stringify(pack, null, 2));
-                      setErrors([]);
-                    }}
-                  >
-                    {editing === pack.id ? 'Close' : 'Edit'}
-                  </Button>
-                  {edited || !builtin ? <Button onClick={() => void reset(pack.id)}>{builtin ? 'Reset' : 'Remove'}</Button> : null}
-                </span>
-              </div>
-              {stale ? <Note tone="warn">Its selectors didn’t match the last product page we saw. Extraction still works through the generic strategies; the pack may need updating.</Note> : null}
-              {!access ? <Note>Items from this site are tracked, but not locked, until Chrome grants access.</Note> : null}
-              {editing === pack.id ? (
-                <div className="mt-3">
-                  <textarea
-                    className="h-72 w-full rounded-xl border border-line bg-surface-2 p-3 font-mono text-[12px] leading-relaxed text-text outline-none focus:border-brass"
-                    value={draft}
-                    spellCheck={false}
-                    onChange={(e) => setDraft(e.currentTarget.value)}
-                  />
-                  {errors.length ? (
-                    <ul className="m-0 mt-2 list-disc pl-5 text-[12.5px] text-danger">
-                      {errors.map((e) => (
-                        <li key={e}>{e}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <div className="mt-2 flex gap-2">
-                    <Button tone="primary" onClick={() => void save(pack.id)}>
-                      Save pack
-                    </Button>
-                    <Button onClick={() => setEditing(null)}>Cancel</Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+        {packs.map(renderPack)}
       </div>
+
+      {platforms.length ? (
+        <div className="mt-4">
+          <h3 className="m-0 text-[13px] font-bold">Platforms</h3>
+          <p className="m-0 mb-2 mt-0.5 text-[12.5px] leading-relaxed text-muted">
+            Matched by how a store is built rather than by its domain, so one pack covers thousands of brand-owned shops.
+            Used only where no pack above applies.
+          </p>
+          <div className="grid gap-2">{platforms.map(renderPack)}</div>
+        </div>
+      ) : null}
 
       <div className="mt-3">
         {editing === '__new__' ? (

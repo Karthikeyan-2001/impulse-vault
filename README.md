@@ -90,6 +90,28 @@ Rules of the codebase:
 
 ---
 
+## Where it works
+
+Out of the box: the seven retailers in the manifest. Anywhere else you can still vault from
+the toolbar popup or the right-click menu, and the timer, verdict and Saved Stack all work —
+but nothing is *locked* until that site is allowed, because a gate needs host access. Two ways
+to grant it:
+
+- **One store at a time** — the vault card offers "Lock this site too", and an item that isn't
+  locked says so in the popup with a one-click fix.
+- **Every shopping site** — one toggle in Options. Chrome asks for access to all sites, which is
+  a real ask, so it is off by default.
+
+In all-sites mode a page that is neither a store you have vaulted from nor a product page costs
+a storage read and a handful of indexed selector lookups, and nothing else happens.
+
+### Platform packs
+
+Most brand-owned stores run on Shopify, WooCommerce or Magento, so those get packs matched by
+fingerprinting the storefront software rather than by domain — one pack covers thousands of
+shops. A domain pack always wins; a platform pack is the fallback; generic extraction is the
+fallback to that.
+
 ## Adding a site pack
 
 A pack is a JSON file in `sites/`, validated by `sites/schema.json`. Nothing about a pack is required — without one, extraction falls back to JSON-LD, microdata, OpenGraph and heuristics, which works on most stores. A pack makes extraction and the lock sharper.

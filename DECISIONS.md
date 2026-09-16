@@ -90,6 +90,37 @@ Every mutation goes through the service worker and a serialised promise chain in
 - **The price delta is neutral-to-positive in both directions.** "Price dropped ₹400 since you vaulted this" / "Price went up ₹400 — good thing you waited?" Never "only 2 left", never a countdown to a deal. Manufacturing urgency is the exact psychology this product exists to defeat; there's a test asserting the copy contains no urgency or shaming words.
 - **Early unlocks are counted and shown without judgement.** The mirror is the point; the guilt isn't.
 
+## 12b. All-sites access is a toggle, not a default
+
+Working on every store needs host access to every site, and Chrome says so in the bluntest
+possible words. For a product whose pitch is "everything stays local", silently shipping that
+in the manifest would be the wrong trade — the install prompt is the one moment the user gets
+to judge it. So the manifest asks for seven retailers, and everything beyond that is granted by
+the user: one store at a time from the vault card, or all of them from one Options toggle.
+
+The cost of all-sites mode is that the content script runs on every page. It therefore decides
+in a few microseconds whether a page can possibly matter: a small index of domains holding
+vaulted items, plus a dozen indexed selector lookups for product-page evidence (JSON-LD, an
+og:product tag, a cart form). Only then does it wake the worker. Nothing is read, sent or
+stored on any other page.
+
+## 12c. Platform packs: fingerprint the software, not the domain
+
+Per-domain packs do not scale to the long tail of brand-owned shops, and the long tail is where
+impulse buying happens. But those shops are not bespoke: most run Shopify, WooCommerce or
+Magento. So a pack can carry `detect` selectors instead of `domains` and be matched by
+fingerprinting the storefront (Shopify ships a `shopify-checkout-api-token` meta tag), which
+makes one pack worth thousands of domains.
+
+This also fixed a real gap: Shopify checkout lives at `/checkouts/c/…`, which the generic cart
+paths missed (`checkout` does not match `checkouts`), and Shopify's "Buy it now" jumps straight
+there. And because a Shopify product is reachable at both `/products/x` and
+`/collections/y/products/x`, matching on the product handle dedupes what would otherwise be two
+vault entries for one thing.
+
+A detection miss is not a failure: the store simply falls back to the generic strategies, which
+is what happened on the custom-built store this came from.
+
 ## 13. No affiliate links — a direct conflict of interest
 
 Affiliate revenue pays per completed purchase. This product's job is to prevent purchases the user would regret. Monetising the "yes" would give every design decision — the gate's passability, the friction dial, the copy on the ripe notification — a financial reason to nudge toward buying, and the user could never be sure which way a nudge pointed. So: no affiliate links, no referral tags, and canonicalisation actively *strips* `tag`, `ref` and `linkCode` params rather than adding them. Same reasoning for no analytics: a behavioural product that measures you is asking you to trust a promise it can't keep locally.
